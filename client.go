@@ -7,7 +7,7 @@ import "crypto/tls"
 import "time"
 
 type Client struct {
-	socket net.Conn
+	conn net.Conn
 
 	Host     string
 	Port     int
@@ -21,37 +21,40 @@ type Client struct {
 }
 
 func (c *Client) Write(s string) error {
-	_, err := c.socket.Write([]byte(s + "\r\n"))
+	_, err := c.conn.Write([]byte(s + "\r\n"))
 
 	return err
 }
 
+func (c *Client) Writef(format string, a ...interface{}) error {
+	return c.Write(fmt.Sprintf(format, a...))
+}
+
 func (c *Client) Connect() error {
-	var socket net.Conn
+	var conn net.Conn
 	var err error
 
 	if c.Secure {
-		socket, err = tls.Dial("tcp", fmt.Sprintf("%s:%v", c.Host, c.Port), &tls.Config{})
+		conn, err = tls.Dial("tcp", fmt.Sprintf("%s:%v", c.Host, c.Port), &tls.Config{})
 	} else {
-		socket, err = net.Dial("tcp", fmt.Sprintf("%s:%v", c.Host, c.Port))
+		conn, err = net.Dial("tcp", fmt.Sprintf("%s:%v", c.Host, c.Port))
 	}
 
 	if err != nil {
 		return err
 	}
 
-	c.socket = socket
+	c.conn = conn
 
-	c.setupPingLoop()
+	go c.setupPingLoop()
+	go c.setupReadLoop()
 
 	if len(c.Password) > 0 {
-		c.Write("PASS " + c.Password)
+		c.Writef("PASS %s", c.Password)
 	}
 
-	c.Write("NICK " + c.Nickname)
-	c.Write("USER " + c.Ident + " 0 * :" + c.Realname)
-
-	c.setupReadLoop()
+	c.Writef("NICK %s", c.Nickname)
+	c.Writef("USER %s 0 * :%s", c.Ident, c.Realname)
 
 	return nil
 }
@@ -59,16 +62,13 @@ func (c *Client) Connect() error {
 func (c *Client) setupPingLoop() {
 	ticker := time.NewTicker(time.Minute * 1)
 
-	go func() {
-		for _ = range ticker.C {
-			fmt.Println("Send ping!")
-			c.Write(fmt.Sprintf("PING :%d", time.Now().UnixNano()))
-		}
-	}()
+	for _ = range ticker.C {
+		c.Writef("PING :%d", time.Now().UnixNano())
+	}
 }
 
 func (c *Client) setupReadLoop() {
-	reader := bufio.NewReader(c.socket)
+	reader := bufio.NewReader(c.conn)
 
 	for {
 		line, err := reader.ReadString('\n')
