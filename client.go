@@ -4,6 +4,7 @@ import "net"
 import "fmt"
 import "bufio"
 import "crypto/tls"
+import "time"
 
 type Client struct {
 	socket net.Conn
@@ -43,21 +44,32 @@ func (c *Client) Connect() error {
 	c.Write("NICK " + c.Nickname)
 	c.Write("USER " + c.Ident + " 0 * :" + c.Realname)
 
-	if err = c.readPump(); err != nil {
-		return err
-	}
+	c.setupPingLoop()
+	c.setupReadLoop()
 
 	return nil
 }
 
-func (c *Client) readPump() error {
+func (c *Client) setupPingLoop() {
+	ticker := time.NewTicker(time.Minute * 1)
+
+	go func() {
+		for _ = range ticker.C {
+			fmt.Println("Send ping!")
+			c.Write(fmt.Sprintf("PING :%d", time.Now().UnixNano()))
+		}
+	}()
+}
+
+func (c *Client) setupReadLoop() {
 	reader := bufio.NewReader(c.socket)
 
 	for {
 		line, err := reader.ReadString('\n')
 
 		if err != nil {
-			return err
+			// todo
+			panic(err)
 		}
 
 		line = line[0 : len(line)-2]
