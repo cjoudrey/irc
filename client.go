@@ -15,6 +15,7 @@ type Client struct {
 	Ident    string
 	Realname string
 	Secure   bool
+	Password string
 
 	Handler EventHandler
 }
@@ -41,10 +42,15 @@ func (c *Client) Connect() error {
 
 	c.socket = socket
 
+	c.setupPingLoop()
+
+	if len(c.Password) > 0 {
+		c.Write("PASS " + c.Password)
+	}
+
 	c.Write("NICK " + c.Nickname)
 	c.Write("USER " + c.Ident + " 0 * :" + c.Realname)
 
-	c.setupPingLoop()
 	c.setupReadLoop()
 
 	return nil
