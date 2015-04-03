@@ -7,7 +7,8 @@ import "crypto/tls"
 import "time"
 
 type Client struct {
-	conn net.Conn
+	conn  net.Conn
+	write chan string
 
 	Host     string
 	Port     int
@@ -20,14 +21,12 @@ type Client struct {
 	Handler EventHandler
 }
 
-func (c *Client) Write(s string) error {
-	_, err := c.conn.Write([]byte(s + "\r\n"))
-
-	return err
+func (c *Client) Write(s string) {
+	c.write <- s
 }
 
-func (c *Client) Writef(format string, a ...interface{}) error {
-	return c.Write(fmt.Sprintf(format, a...))
+func (c *Client) Writef(format string, a ...interface{}) {
+	c.Write(fmt.Sprintf(format, a...))
 }
 
 func (c *Client) Connect() error {
@@ -45,9 +44,11 @@ func (c *Client) Connect() error {
 	}
 
 	c.conn = conn
+	c.write = make(chan string)
 
 	go c.setupPingLoop()
 	go c.setupReadLoop()
+	go c.setupWriteLoop()
 
 	if len(c.Password) > 0 {
 		c.Writef("PASS %s", c.Password)
@@ -84,5 +85,26 @@ func (c *Client) setupReadLoop() {
 		message.parse()
 
 		c.Handler.trigger(c, &message)
+	}
+}
+
+func (c *Client) setupWriteLoop() {
+	tickets := make(chan bool, 5)
+	ticker := time.Tick(1 * time.Second)
+
+	go func() {
+		for _ = range ticker {
+			tickets <- true
+		}
+	}()
+
+	for line := range c.write {
+		<-tickets
+		_, err := c.conn.Write([]byte(line + "\r\n"))
+
+		if err != nil {
+			// todo
+			panic(err)
+		}
 	}
 }
