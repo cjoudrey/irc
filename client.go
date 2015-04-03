@@ -3,6 +3,7 @@ package irc
 import "net"
 import "fmt"
 import "bufio"
+import "crypto/tls"
 
 type Client struct {
 	socket net.Conn
@@ -12,6 +13,7 @@ type Client struct {
 	Nickname string
 	Ident    string
 	Realname string
+	Secure   bool
 
 	Handler EventHandler
 }
@@ -23,7 +25,14 @@ func (c *Client) Write(s string) error {
 }
 
 func (c *Client) Connect() error {
-	socket, err := net.Dial("tcp", fmt.Sprintf("%s:%v", c.Host, c.Port))
+	var socket net.Conn
+	var err error
+
+	if c.Secure {
+		socket, err = tls.Dial("tcp", fmt.Sprintf("%s:%v", c.Host, c.Port), &tls.Config{})
+	} else {
+		socket, err = net.Dial("tcp", fmt.Sprintf("%s:%v", c.Host, c.Port))
+	}
 
 	if err != nil {
 		return err
