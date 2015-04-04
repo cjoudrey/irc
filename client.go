@@ -84,6 +84,10 @@ func (c *Client) setupReadLoop() {
 		message := Message{raw: line}
 		message.parse()
 
+		if message.Command == "PING" {
+			c.Writef("PONG %s", message.Params[0])
+		}
+
 		c.Handler.trigger(c, &message)
 	}
 }
