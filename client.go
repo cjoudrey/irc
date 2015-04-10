@@ -46,9 +46,9 @@ func (c *Client) Connect() error {
 	c.conn = conn
 	c.write = make(chan string)
 
-	go c.setupPingLoop()
-	go c.setupReadLoop()
-	go c.setupWriteLoop()
+	go c.pingLoop()
+	go c.readLoop()
+	go c.writeLoop()
 
 	if len(c.Password) > 0 {
 		c.Writef("PASS %s", c.Password)
@@ -60,7 +60,7 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-func (c *Client) setupPingLoop() {
+func (c *Client) pingLoop() {
 	ticker := time.NewTicker(time.Minute * 1)
 
 	for _ = range ticker.C {
@@ -68,7 +68,7 @@ func (c *Client) setupPingLoop() {
 	}
 }
 
-func (c *Client) setupReadLoop() {
+func (c *Client) readLoop() {
 	reader := bufio.NewReader(c.conn)
 
 	for {
@@ -92,7 +92,7 @@ func (c *Client) setupReadLoop() {
 	}
 }
 
-func (c *Client) setupWriteLoop() {
+func (c *Client) writeLoop() {
 	tickets := make(chan bool, 5)
 	ticker := time.Tick(1 * time.Second)
 
