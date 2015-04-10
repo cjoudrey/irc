@@ -8,6 +8,7 @@ import "time"
 
 type Client struct {
 	conn  net.Conn
+	err   chan error
 	write chan string
 
 	Host     string
@@ -45,6 +46,7 @@ func (c *Client) Connect() error {
 
 	c.conn = conn
 	c.write = make(chan string)
+	c.err = make(chan error)
 
 	go c.pingLoop()
 	go c.readLoop()
@@ -57,7 +59,10 @@ func (c *Client) Connect() error {
 	c.Writef("NICK %s", c.Nickname)
 	c.Writef("USER %s 0 * :%s", c.Ident, c.Realname)
 
-	return nil
+	select {
+	case err = <-c.err:
+		return err
+	}
 }
 
 func (c *Client) pingLoop() {
@@ -75,8 +80,8 @@ func (c *Client) readLoop() {
 		line, err := reader.ReadString('\n')
 
 		if err != nil {
-			// todo
-			panic(err)
+			c.err <- err
+			return
 		}
 
 		line = line[0 : len(line)-2]
@@ -107,8 +112,8 @@ func (c *Client) writeLoop() {
 		_, err := c.conn.Write([]byte(line + "\r\n"))
 
 		if err != nil {
-			// todo
-			panic(err)
+			c.err <- err
+			return
 		}
 	}
 }
